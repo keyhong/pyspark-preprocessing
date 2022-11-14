@@ -373,7 +373,7 @@ if __name__ == '__main__':
             # 저장하기
             unique_add_grid.write.format('parquet').mode('append').saveAsTable("SOSS.PCEL_STDR_INFO")
 
-            """ 새로 추가된 행렬번호 데이터를 조회하여, 유동인구 데이터 추가하기"""
+            ''' 새로 추가된 행렬번호 데이터를 조회하여, 유동인구 데이터 추가하기 '''
             # 공간격자 인데스 다시 불러오기
             pcel_stdr_info_df = spark_session.get_pcel_stdr_info()
 
