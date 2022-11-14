@@ -123,11 +123,11 @@ class QueryMixin:
 
     def find_lastest_yearMonth(self) -> List[int]:
         '''
-            Returns list of dates can be loaded from ADHC.DAEGU_SERVICE_PCELL_TIME_POP to SOSS.DW_DG_PCELL_TMZN_FPOP.
+            Returns list of dates can be loaded from ADHC.SERVICE_PCELL_TIME_POP to SOSS.DW_PCELL_TMZN_FPOP.
         '''
 
         # 1. 가장 마지막 년월을 찾는다
-        query = 'SHOW PARTITIONS SOSS.DW_DG_PCELL_TMZN_FPOP'
+        query = 'SHOW PARTITIONS SOSS.DW_PCELL_TMZN_FPOP'
 
         try:
             lastest_yearMonth = self.spark_session.sql(query)
@@ -141,7 +141,7 @@ class QueryMixin:
             lastest_yearMonth = int(lastest_yearMonth.values[-1][0][-6:])
 
         # 2. 새로 넣을 수 있는 데이터가 있는 지 확인한다.
-        query = 'SHOW PARTITIONS ADHC.DAEGU_SERVICE_PCELL_TIME_POP'
+        query = 'SHOW PARTITIONS ADHC.SERVICE_PCELL_TIME_POP'
         
         try:
             pcel_partitions = self.spark_session.sql(query)
@@ -159,30 +159,30 @@ class QueryMixin:
 
         return yearMonth_lst
 
-    def get_dg_pcel_stdr_info(self) -> pyspark.sql.DataFrame:
+    def get_pcel_stdr_info(self) -> pyspark.sql.DataFrame:
         
-        # 테이블명 : 대구PCELL기준정보
-        table_nm = 'SOSS.DG_PCEL_STDR_INFO'
+        # 테이블명 : PCELL기준정보
+        table_nm = 'SOSS.PCEL_STDR_INFO'
 
         query = f''' 
-                    SELECT /* 
+                    SELECT /* PCELL기준정보 */
                            grid_id
                          , mtr_no
                       FROM {table_nm}
                  '''
 
         try:
-            dg_pcel_stdr_info = self.spark_session.sql(query)
+            pcel_stdr_info = self.spark_session.sql(query)
         except pyspark.sql.utils.AnalysisException:
             logging.error("Unable to process your query dude!!")
         except MemoryError:
             logging.error('Memory is full')
             
-        return dg_pcel_stdr_info
+        return pcel_stdr_info
 
     def get_last_pcel_id(self) -> int:
 
-        query = 'SELECT MAX(grid_id) FROM SOSS.DG_PCEL_STDR_INFO'
+        query = 'SELECT MAX(grid_id) FROM SOSS.PCEL_STDR_INFO'
 
         try:
             last_pcel_id = self.spark_session.sql(query)
@@ -198,12 +198,12 @@ class QueryMixin:
 
         return last_pcel_id
 
-    def get_daegu_service_pcell_time_pop(self, yearMonth: str) -> pyspark.sql.DataFrame:
+    def get_service_pcell_time_pop(self, yearMonth: str) -> pyspark.sql.DataFrame:
 
-        # 대구서비스PCELL시간인구(PCELL)
-        table_nm = 'ADHC.DAEGU_SERVICE_PCELL_TIME_POP'
+        # 서비스PCELL시간인구(PCELL)
+        table_nm = 'ADHC.SERVICE_PCELL_TIME_POP'
 
-        query = f'''SELECT /* 대구서비스PCELL시간인구(PCELL)*/
+        query = f'''SELECT /* 서비스PCELL시간인구(PCELL) */
                            *
                       FROM {table_nm}
                      WHERE PT_STDR_YM={yearMonth}
@@ -251,7 +251,7 @@ if __name__ == '__main__':
         logging.info(f'{yearMonth} 시작 --')
 
         # PCELL단위_시간대별_유동인구 데이터 로딩
-        pcell_time_pop_df = spark_session.get_daegu_service_pcell_time_pop(yearMonth)
+        pcell_time_pop_df = spark_session.get_service_pcell_time_pop(yearMonth)
 
         for time in times:
             pcell_time_pop_df = pcell_time_pop_df.withColumn( f'sum_{time}', sum( [ F.col(col_name) for col_name in [f'H_T_{time}', f'W_T_{time}', f'V_T_{time}'] ] ) )
@@ -261,9 +261,9 @@ if __name__ == '__main__':
 
         for time in times:
 
-            """ 기존 행렬번호가 있는 데이터를 대상으로 유동인구 데이터 추가하기 """
-            # pcel_stdr_info_df(대구PCELL기준정보) 데이터 로딩
-            pcel_stdr_info_df = spark_session.get_dg_pcel_stdr_info()
+            ''' 기존 행렬번호가 있는 데이터를 대상으로 유동인구 데이터 추가하기 '''
+            # pcel_stdr_info_df(PCELL기준정보) 데이터 로딩
+            pcel_stdr_info_df = spark_session.get_pcel_stdr_info()
 
             # 기준일자-행정동코드-중심X좌표-중심Y좌표를 기준으로 유동인구 합계 데이터 생성
             mtr_df = pcell_time_pop_df.groupBy( ['stdr_de', 'admd_cd', 'cnt_x_crd', 'cnt_y_crd'] ).agg( F.sum(f'sum_{time}').alias('fpop_co') )
@@ -289,7 +289,7 @@ if __name__ == '__main__':
             mtr_df = mtr_df.withColumn('pt_stdr_ym', F.col('stdr_de').substr(0, 6).cast(StringType()))
 
             
-            """ 행렬번호가 기존 pcel_stdr_info_df(대구PCELL기준정보)에 없는 데이터는 새로 grid_id(그리드ID@pk)를 새로 추가하기 """
+            ''' 행렬번호가 기존 pcel_stdr_info_df(PCELL기준정보)에 없는 데이터는 새로 grid_id(그리드ID@pk)를 새로 추가하기 '''
             # 그리드id 결측행(기존 데이터에 추가할 행렬번호) 유무 확인
             mtr_null_df = mtr_df.where(F.col("grid_id").isNull()).select('stdr_de', 'stdr_tm', 'mtr_no', 'admd_cd', 'cnt_x_crd', 'cnt_y_crd', 'gu_cd', 'fpop_co', 'pt_stdr_ym')
 
@@ -297,7 +297,7 @@ if __name__ == '__main__':
 
                 mtr_df.where(F.col("grid_id").isNotNull()) \
                       .select('stdr_de', 'stdr_tm', 'grid_id', 'admd_cd', 'gu_cd', 'fpop_co', 'pt_stdr_ym') \
-                      .write.format('hive').mode("append").partitionBy('pt_stdr_ym').saveAsTable("SOSS.DW_DG_PCELL_TMZN_FPOP")
+                      .write.format('hive').mode("append").partitionBy('pt_stdr_ym').saveAsTable("SOSS.DW_PCELL_TMZN_FPOP")
 
                 logging.info('추가 할 데이터가 존재하지 않습니다.')
                 continue
@@ -306,7 +306,7 @@ if __name__ == '__main__':
                 unique_add_grid = mtr_null_df.dropDuplicates(subset=['mtr_no']).alias('unique_add_grid').select('mtr_no', 'admd_cd', 'cnt_x_crd', 'cnt_y_crd')
 
             
-            # 추가할 그리드 데이터 생성
+            ''' 추가할 그리드 데이터 생성 ''' 
 
             # 1. row_no(행번호), clm_no(열번호) 컬럼 생성
             unique_add_grid = unique_add_grid.withColumn('row_no', F.split(str=F.col('mtr_no'), pattern=',')[0].cast(StringType()))
@@ -371,16 +371,16 @@ if __name__ == '__main__':
             )
 
             # 저장하기
-            unique_add_grid.write.format('parquet').mode('append').saveAsTable("SOSS.DG_PCEL_STDR_INFO")
+            unique_add_grid.write.format('parquet').mode('append').saveAsTable("SOSS.PCEL_STDR_INFO")
 
             """ 새로 추가된 행렬번호 데이터를 조회하여, 유동인구 데이터 추가하기"""
             # 공간격자 인데스 다시 불러오기
-            pcel_stdr_info_df = spark_session.get_dg_pcel_stdr_info()
+            pcel_stdr_info_df = spark_session.get_pcel_stdr_info()
 
-            # 변경된 대구PCELL기준정보 데이터에 mtr_df 데이터를 결합하여 대구PCELL단위시간대별유동인구 데이터 적재
+            # 변경된 PCELL기준정보 데이터에 mtr_df 데이터를 결합하여 PCELL단위시간대별유동인구 데이터 적재
             mtr_df.where(F.col("grid_id").isNotNull()) \
                   .select('stdr_de', 'stdr_tm', 'grid_id', 'admd_cd', 'gu_cd', 'fpop_co', 'pt_stdr_ym') \
-                  .write.format('hive').mode("append").partitionBy('pt_stdr_ym').saveAsTable("SOSS.DW_DG_PCELL_TMZN_FPOP")
+                  .write.format('hive').mode("append").partitionBy('pt_stdr_ym').saveAsTable("SOSS.DW_PCELL_TMZN_FPOP")
 
             del mtr_df, unique_add_grid, mtr_null_df, pcel_stdr_info_df
 
