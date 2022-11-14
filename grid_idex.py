@@ -28,6 +28,14 @@ import pyspark.sql.functions as F
 import pyspark.sql.utils
 from pyspark.sql.types import IntegerType, StringType
 
+# logging
+import logging
+logging.basicConfig(
+    format = '%(asctime)s : %(levelname)s : %(message)s',
+    datefmt = '%Y-%m-%d %H:%M:%S',
+    level = logging.INFO
+)
+
 # annotation
 from typing import TypeVar, List
 Pandas_DataFrame = TypeVar(pd.DataFrame)
@@ -93,9 +101,9 @@ class QueryMixin:
         try:
             cctv_info_df = self.spark_session.sql(query)
         except pyspark.sql.utils.AnalysisException:
-            print("Unable to process your query dude!!")
+            logging.error("Unable to process your query dude!!")
         except MemoryError:
-            print('Memory is full')
+            logging.error('Memory is full')
         else:
             cctv_info_df = cctv_info_df.dropna().toPandas()
 
@@ -124,11 +132,11 @@ class QueryMixin:
         try:
             lastest_yearMonth = self.spark_session.sql(query)
         except pyspark.sql.utils.AnalysisException:
-            print("Unable to process your query dude!!")
+            logging.error("Unable to process your query dude!!")
         except MemoryError:
-            print('Memory is full')
+            logging.error('Memory is full')
         except ValueError:
-            print('data type is not changed')
+            logging.error('data type is not changed')
             lastest_yearMonth = lastest_yearMonth.toPandas()
             lastest_yearMonth = int(lastest_yearMonth.values[-1][0][-6:])
 
@@ -138,16 +146,16 @@ class QueryMixin:
         try:
             pcel_partitions = self.spark_session.sql(query)
         except pyspark.sql.utils.AnalysisException:
-            print("Unable to process your query dude!!")
+            logging.error("Unable to process your query dude!!")
         except MemoryError:
-            print('Memory is full')
+            logging.error('Memory is full')
             pcel_partitions = pcel_partitions.toPandas()
         else:
             pcel_partitions['partition'] = pcel_partitions['partition'].str[-6:].astype(int)
 
         # 3. 새로 넣을 수 있는 년월 데이터만 모아 리스트를 생성한다
         yearMonth_lst = [ yearMonth for yearMonth in pcel_partitions['partition'] if yearMonth > lastest_yearMonth ]
-        print(f'추가 할 데이터의 년월 : {yearMonth_lst}')
+        logging.info(f'추가 할 데이터의 년월 : {yearMonth_lst}')
 
         return yearMonth_lst
 
@@ -166,9 +174,9 @@ class QueryMixin:
         try:
             dg_pcel_stdr_info = self.spark_session.sql(query)
         except pyspark.sql.utils.AnalysisException:
-            print("Unable to process your query dude!!")
+            logging.error("Unable to process your query dude!!")
         except MemoryError:
-            print('Memory is full')
+            logging.error('Memory is full')
             
         return dg_pcel_stdr_info
 
@@ -179,11 +187,11 @@ class QueryMixin:
         try:
             last_pcel_id = self.spark_session.sql(query)
         except pyspark.sql.utils.AnalysisException:
-            print("Unable to process your query dude!!")
+            logging.error("Unable to process your query dude!!")
         except MemoryError:
-            print('Memory is full')
+            logging.error('Memory is full')
         except ValueError:
-            print('data type is not changed')
+            logging.error('data type is not changed')
         else:
             last_pcel_id = last_pcel_id.toPandas()
             last_pcel_id = int(last_pcel_id.values[0][0][-6:])
@@ -204,9 +212,9 @@ class QueryMixin:
         try:
             pcel_df = self.spark_session.sql(query)
         except pyspark.sql.utils.AnalysisException:
-            print("Unable to process your query dude!!")
+            logging.error("Unable to process your query dude!!")
         except MemoryError:
-            print('Memory is full')
+            logging.error('Memory is full')
         else:
             drop_cols = ['pt_stdr_ym', 'block_cd']
             pcel_df = pcel_df.drop(*drop_cols)
@@ -219,13 +227,9 @@ class QueryMixin:
         return pcel_df
 
 
-def print_current_time() -> str:
-    return f'TIME : {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
-
-
 if __name__ == '__main__':
 
-    print(f'--------------------{__file__} 프로그램 시작 --')
+    logging.info(f'{os.path.basename(__file__)} 프로그램 시작 --')
 
     # 스파크 세션 생성
     spark_session = SparkClass().create_spark_session()
@@ -244,7 +248,7 @@ if __name__ == '__main__':
 
     for yearMonth in appendable_yearMonths:
 
-        print(f'{yearMonth} 시작 --', print_current_time())
+        logging.info(f'{yearMonth} 시작 --')
 
         # PCELL단위_시간대별_유동인구 데이터 로딩
         pcell_time_pop_df = spark_session.get_daegu_service_pcell_time_pop(yearMonth)
@@ -295,10 +299,10 @@ if __name__ == '__main__':
                       .select('stdr_de', 'stdr_tm', 'grid_id', 'admd_cd', 'gu_cd', 'fpop_co', 'pt_stdr_ym') \
                       .write.format('hive').mode("append").partitionBy('pt_stdr_ym').saveAsTable("SOSS.DW_DG_PCELL_TMZN_FPOP")
 
-                print('추가 할 데이터가 존재하지 않습니다.')
+                logging.info('추가 할 데이터가 존재하지 않습니다.')
                 continue
             else:
-                print(f'{yearMonth}월 데이터를 추가합니다.')
+                logging.info(f'{yearMonth}월 데이터를 추가합니다.')
                 unique_add_grid = mtr_null_df.dropDuplicates(subset=['mtr_no']).alias('unique_add_grid').select('mtr_no', 'admd_cd', 'cnt_x_crd', 'cnt_y_crd')
 
             
@@ -369,7 +373,6 @@ if __name__ == '__main__':
             # 저장하기
             unique_add_grid.write.format('parquet').mode('append').saveAsTable("SOSS.DG_PCEL_STDR_INFO")
 
-
             """ 새로 추가된 행렬번호 데이터를 조회하여, 유동인구 데이터 추가하기"""
             # 공간격자 인데스 다시 불러오기
             pcel_stdr_info_df = spark_session.get_dg_pcel_stdr_info()
@@ -381,3 +384,4 @@ if __name__ == '__main__':
 
             del mtr_df, unique_add_grid, mtr_null_df, pcel_stdr_info_df
 
+    logging.info(f'-------------------- 프로그램 종료 -- ')
