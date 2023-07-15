@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# PCELL_X(2019년 PCELL_X 최솟값) = pcell_info.min_x_crd.min() = 1077058.991787
-PCELL_X: float = 1077058.991787 
-
-# PCELL_Y(2019년 PCELL_Y 최대값) = pcell_info.max_y_crd.max() = 1735054.147390
-PCELL_Y: float = 1780604.147390 
+from __future__ import annotations
 
 import logging
 import sys
@@ -22,6 +18,12 @@ from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 from pyspark.sql.utils import ParseException
 from pyspark.sql.types import IntegerType, StringType
+
+# PCELL_X(2019년 PCELL_X 최솟값) = pcell_info.min_x_crd.min() = 1077058.991787
+PCELL_X: float = 1077058.991787 
+
+# PCELL_Y(2019년 PCELL_Y 최대값) = pcell_info.max_y_crd.max() = 1735054.147390
+PCELL_Y: float = 1780604.147390 
 
 def transform_coord_format(df: pd.DataFrame, case: int=0) -> pd.Series:
 
