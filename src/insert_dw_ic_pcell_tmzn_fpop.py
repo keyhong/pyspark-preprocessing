@@ -1,49 +1,49 @@
-import os
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
-import sys
-sys.path.insert(0, os.path.join(os.environ['SPARK_HOME'] + 'python'))
-
-import warnings
-warnings.filterwarnings('ignore')
-
-import logging
-
-from collections import namedtuple
 import calendar
+from collections import namedtuple
+import logging
+import os
+import sys
+sys.path.insert(0, os.path.join(os.environ["SPARK_HOME"], "python"))
+from typing import Dict, List, Iterable, Type 
+import warnings
+warnings.filterwarnings("ignore")
 
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 
-from typing import Iterable, Type, List
-
-def get_yearMonthDay_lst(year: int=2022) -> List[Type[Date]]:
+def get_yearMonthDay_lst(year: int=2022) -> List[Type["Date"]]:
     
     if not isinstance(year, int):
-        raise ValueError('year must be int')
+        raise ValueError("year must be int")
         
-    Date = namedtuple('yearMonthDay', ['first_date', 'last_date'])
+    Date = namedtuple("yearMonthDay", ["first_date", "last_date"])
 
     date_lst: List[Date] = []
 
     for month in range(1, 13):
         last_day = calendar.monthrange(year, month)[1]
 
-        first_date = ''.join([str(year), str(month).zfill(2), '01'])
-        last_date = ''.join([str(year), str(month).zfill(2), str(last_day).zfill(2)])
+        first_date = "".join([str(year), str(month).zfill(2), "01"])
+        last_date = "".join([str(year), str(month).zfill(2), str(last_day).zfill(2)])
 
         date_lst.append(Date(first_date, last_date))
         
     return date_lst
 
 def melt(
-    dataFrame: 'pyspark.sql.DataFrame', 
+    dataFrame: "pyspark.sql.DataFrame", 
     id_vars: Iterable[str],
     value_vars: Iterable[str], 
-    var_name: str='variable',
-    value_name: str='value'
-) -> 'pyspark.sql.DataFrame':
+    var_name: str="variable",
+    value_name: str="value"
+) -> "pyspark.sql.DataFrame":
     
-    """Convert :class:`DataFrame` from wide to long format."""
+    """
+    Convert :class:`DataFrame` from wide to long format.
+    """
 
     # Create array<struct<variable: str, value: ...>>
     _vars_and_vals = F.array( *(F.struct(F.lit(c).alias(var_name), F.col(c).alias(value_name)) for c in value_vars) )
@@ -55,53 +55,52 @@ def melt(
     
     return _tmp.select(*cols)
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     # logging setting
     format = "%(asctime)s: %(message)s"
     logging.basicConfig(format=format, level=logging.INFO, datefmt="%H:%M:%S")
-    logging.info("Main-Process : start")
+    logging.info("Main-Process : Start")
     
-    gu_dict = {
-        'Bupyeong-gu' : 28237,
-        'Dong-gu' : 28140,
-        'Jung-gu' : 28110,
-        'Gyeyang-gu' : 28245,
-        'Namdong-gu' : 28200,
-        'Ongjin-gun' : 28720,
-        'Yeonsu-gu' : 28185,
-        'Michuhol-gu' : 28177,
-        'Seo-gu' : 28260,
-        'Ganghwa-gun' : 28710
+    gu_dict: Dict[str, int] = {
+        "Bupyeong-gu" : 28237,
+        "Dong-gu" : 28140,
+        "Jung-gu" : 28110,
+        "Gyeyang-gu" : 28245,
+        "Namdong-gu" : 28200,
+        "Ongjin-gun" : 28720,
+        "Yeonsu-gu" : 28185,
+        "Michuhol-gu" : 28177,
+        "Seo-gu" : 28260,
+        "Ganghwa-gun" : 28710
     }
     
-    dbms = 'postgresql'
+    dbms = "postgresql"
 
-    host = '####'
-    port = '####'
-    database = '####'
+    host = "####"
+    port = "####"
+    database = "####"
 
-    user = '####'
-    password = '####'
+    user = "####"
+    password = "####"
 
     # SparkSession build. (spark deploymode : local)
     spark = SparkSession.builder \
-        .appName('soss2.0') \
-        .master('local[*]') \
-        .config('spark.jars', '/opt/spark/postgresql-42.5.4.jar') \
-        .config('spark.driver.memory', '24g') \
-        .config('spark.ui.port', '8080') \
+        .appName("soss2.0") \
+        .master("local[*]") \
+        .config("spark.jars", "/opt/spark/postgresql-42.5.4.jar") \
+        .config("spark.driver.memory", "24g") \
+        .config("spark.ui.port", "8080") \
         .getOrCreate()
 
     spark.sparkContext.setLogLevel("WARN")
     
 
-    for gu_nm, gu_cd in gu_dict.items():
+    for _, gu_cd in gu_dict.items():
         
         for first_date, last_date in get_yearMonthDay_lst():
         
-            sql = f'''
+            sql = f"""
             SELECT std_ymd, x_coord, y_coord, hcode
                  , h_t_00, h_t_01, h_t_02, h_t_03, h_t_04, h_t_05, h_t_06, h_t_07
                  , h_t_08, h_t_09, h_t_10, h_t_11, h_t_12, h_t_13, h_t_14, h_t_15
@@ -115,93 +114,93 @@ if __name__ == '__main__':
               FROM ADHC.INCHEON_SERVICE_PCELL_TIME_POP
              WHERE std_ymd BETWEEN '{first_date}' AND '{last_date}'
                AND hcode LIKE '{gu_cd}%'
-            '''
+            """
 
             # get data from postgres db
-            df = spark.read.format('jdbc') \
-                .option('url', f'jdbc:{dbms}://{host}:{port}/{database}') \
-                .option('user', user) \
-                .option('password', password) \
-                .option('query', sql) \
+            df = spark.read.format("jdbc") \
+                .option("url", f"jdbc:{dbms}://{host}:{port}/{database}") \
+                .option("user", user) \
+                .option("password", password) \
+                .option("query", sql) \
                 .load()
 
-            # make column 'gu_cd'
-            df = df.withColumn('gu_cd', F.col('hcode').substr(1, 5))
+            # make column "gu_cd"
+            df = df.withColumn("gu_cd", F.col("hcode").substr(1, 5))
 
             # drop columns
-            df = df.drop(*['hcode', 'block_cd'])
+            df = df.drop(*["hcode", "block_cd"])
 
             # rename columns
-            df = df.withColumnRenamed('std_ymd', 'stdr_de') \
-                .withColumnRenamed('x_coord', 'cnt_x_crd') \
-                .withColumnRenamed('y_coord', 'cnt_y_crd')
+            df = df.withColumnRenamed("std_ymd", "stdr_de") \
+                .withColumnRenamed("x_coord", "cnt_x_crd") \
+                .withColumnRenamed("y_coord", "cnt_y_crd")
 
             # 시간별 주거 + 직장 + 방문 합계 산출
 
             # 00 ~ 23시간 리스트 산출
             tms : List[str] = [ str(tm).zfill(2) for tm in range(24) ]
             
-            # make column 'tm' (tatal pop by hour) & drop column 'H_T_{tm}', 'W_T_{tm}', 'V_T_{tm}'
+            # make column "tm" (tatal pop by hour) & drop column "H_T_{tm}", "W_T_{tm}", "V_T_{tm}"
             for tm in tms:
-                df = df.withColumn(f'{tm}',sum([F.col(col_name) for col_name in [f'H_T_{tm}', f'W_T_{tm}', f'V_T_{tm}']]))
-                drop_cols = [f'H_T_{tm}', f'W_T_{tm}', f'V_T_{tm}']
+                df = df.withColumn(f"{tm}",sum([F.col(col_name) for col_name in [f"H_T_{tm}", f"W_T_{tm}", f"V_T_{tm}"]]))
+                drop_cols = [f"H_T_{tm}", f"W_T_{tm}", f"V_T_{tm}"]
                 df = df.drop(*drop_cols)
 
             min_x_crd = 746758.991784
             min_y_crd = 1883404.14739
             
-            # make column 'row_id'
+            # make column "row_id"
             pcell_time_pop_matrix = df.withColumn(
-                colName='row_id' ,
-                col=((F.col('cnt_x_crd').cast('decimal(38, 18)') - F.lit(min_x_crd).cast('decimal(38, 18)')) / F.lit(50).cast('decimal(38, 18)')).cast('Integer')
+                colName="row_id" ,
+                col=((F.col("cnt_x_crd").cast("DECIMAL(38, 18)") - F.lit(min_x_crd).cast("DECIMAL(38, 18)")) / F.lit(50).cast("DECIMAL(38, 18)")).cast("Integer")
             )
 
-            # make column 'col_id'
+            # make column "col_id"
             pcell_time_pop_matrix = pcell_time_pop_matrix.withColumn(
-                colName='col_id',
-                col=((F.col('cnt_y_crd').cast('decimal(38, 18)')-F.lit(min_y_crd).cast('decimal(38, 18)')) / F.lit(50).cast('decimal(38, 18)')).cast('Integer')
+                colName="col_id",
+                col=((F.col("cnt_y_crd").cast("DECIMAL(38, 18)")-F.lit(min_y_crd).cast("DECIMAL(38, 18)")) / F.lit(50).cast("DECIMAL(38, 18)")).cast("Integer")
             )
             
-            # drop column 'cnt_x_crd', 'cnt_y_crd'
-            pcell_time_pop_matrix = pcell_time_pop_matrix.drop(*['cnt_x_crd', 'cnt_y_crd'])
+            # drop column "cnt_x_crd", "cnt_y_crd"
+            pcell_time_pop_matrix = pcell_time_pop_matrix.drop(*["cnt_x_crd", "cnt_y_crd"])
 
-            # make column 'mtr_no'
-            pcell_time_pop_matrix = pcell_time_pop_matrix.withColumn('mtr_no', F.concat_ws(',', F.col('row_id'), F.col('col_id')))
+            # make column "mtr_no"
+            pcell_time_pop_matrix = pcell_time_pop_matrix.withColumn("mtr_no", F.concat_ws(",", F.col("row_id"), F.col("col_id")))
 
             # melt
             pcell_time_pop_melt = melt(
                 dataframe=pcell_time_pop_matrix,
-                id_vars=['stdr_de', 'mtr_no', 'gu_cd'],
-                var_name='stdr_tm',
+                id_vars=["stdr_de", "mtr_no", "gu_cd"],
+                var_name="stdr_tm",
                 value_vars=[
-                    '00', '01', '02', '03', '04', '05',
-                    '06', '07', '08', '09', '10', '11',
-                    '12', '13', '14', '15', '16', '17',
-                    '18', '19', '20', '21', '22', '23'
+                    "00", "01", "02", "03", "04", "05",
+                    "06", "07", "08", "09", "10", "11",
+                    "12", "13", "14", "15", "16", "17",
+                    "18", "19", "20", "21", "22", "23"
                 ]
             )
 
-            # make column 'fpop_co' (groupby value)
-            pcell_time_pop = pcell_time_pop_melt.groupBy(['stdr_de', 'stdr_tm', 'mtr_no', 'gu_cd']).agg(F.sum('value').alias('fpop_co'))
+            # make column "fpop_co" (groupby value)
+            pcell_time_pop = pcell_time_pop_melt.groupBy(["stdr_de", "stdr_tm", "mtr_no", "gu_cd"]).agg(F.sum("value").alias("fpop_co"))
 
-            sql = 'SELECT grid_id, mtr_no FROM SOSS.IC_PCEL_STDR_INFO'
+            sql = "SELECT grid_id, mtr_no FROM SOSS.IC_PCEL_STDR_INFO"
             
-            pcell_stdr_info = spark.read.format('jdbc') \
-                .option('url', f'jdbc:{dbms}://{host}:{port}/{database}') \
-                .option('user', user) \
-                .option('password', password) \
-                .option('query', sql) \
+            pcell_stdr_info = spark.read.format("jdbc") \
+                .option("url", f"jdbc:{dbms}://{host}:{port}/{database}") \
+                .option("user", user) \
+                .option("password", password) \
+                .option("query", sql) \
                 .load()
 
-            df_join = pcell_time_pop.join(other=pcell_stdr_info, on='mtr_no', how='left')
-            df_join = df_join.drop(*['mtr_no'])
+            df_join = pcell_time_pop.join(other=pcell_stdr_info, on="mtr_no", how="left")
+            df_join = df_join.drop(*["mtr_no"])
 
             # load output data (spark action)
             df_join.write.jdbc(
-                url=f'jdbc:postgresql://{host}:{port}/{database}',
-                table='SOSS.DW_IC_PCELL_TMZN_FPOP2',
-                mode='append',
-                properties={'user': user, 'password': password}
+                url=f"jdbc:postgresql://{host}:{port}/{database}",
+                table="SOSS.DW_IC_PCELL_TMZN_FPOP",
+                mode="append",
+                properties={"user": user, "password": password}
             )
             
-    logging.info("Main-Process : end")
+    logging.info("Main-Process : End")
