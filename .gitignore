@@ -1,0 +1,7 @@
+# Custom
+__pycache__/
+.DS_Store
+.ruff_cache/
+
+# VS Code
+.vscode/
